@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LangChain Air Pollution Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .message-bubble {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slide-in 0.5s forwards;
+        }
+        @keyframes slide-in {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div id="app" class="flex flex-col h-screen">
+        <header class="bg-gray-800 p-4 shadow-lg z-10">
+            <h1 class="text-2xl font-bold text-center text-cyan-300">Advanced Air Pollution Chatbot</h1>
+            <p class="text-center text-gray-400 text-sm">Frontend with LangChain Backend</p>
+        </header>
+
+        <main id="chat-window" class="flex-1 overflow-y-auto p-6 space-y-6">
+            </main>
+
+        <footer class="bg-gray-800 p-4">
+            <div class="flex items-center max-w-3xl mx-auto">
+                <input
+                    id="user-input"
+                    type="text"
+                    placeholder="e.g., 'Plot PM2.5 in Roorkee for the last week'"
+                    class="flex-1 p-3 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 text-white transition-shadow"
+                />
+                <button
+                    id="send-button"
+                    class="px-6 py-3 bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed rounded-r-lg font-semibold transition-colors"
+                >
+                    Send
+                </button>
+            </div>
+        </footer>
+    </div>
+
+<script>
+    // --- DOM Elements ---
+    const chatWindow = document.getElementById('chat-window');
+    const userInput = document.getElementById('user-input');
+    const sendButton = document.getElementById('send-button');
+
+    // --- State Management ---
+    let isLoading = false;
+    const BACKEND_URL = 'https://your-backend-name.onrender.com/chat';
+
+    // --- Helper Function ---
+    function markdownToHtml(text) {
+        if (!text) return '';
+        let html = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\n/g, '<br>');
+        return html;
+    }
+
+    // --- UI Rendering ---
+
+    /**
+     * 2. NEW FUNCTION: Renders a chart inside a message bubble.
+     * Takes a canvas element and the chart data from the backend.
+     */
+    function renderChart(canvasElement, chartData) {
+    if (!canvasElement || !chartData) return;
+
+    // --- Enhanced Dataset Styling ---
+    // This loop adds better visual styles to the data sent from the backend.
+    chartData.datasets.forEach(dataset => {
+        dataset.fill = true; // Creates a filled area under the line
+        dataset.borderWidth = 2; // Makes the line thicker
+        dataset.pointRadius = 4; // Makes the data points larger
+        dataset.pointBackgroundColor = dataset.borderColor; // Fills the data points
+        dataset.tension = 0.3; // Slightly curves the line
+    });
+
+    new Chart(canvasElement, {
+        type: chartData.type || 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: chartData.datasets
+        },
+        // --- NEW ENHANCED OPTIONS ---
+        options: {
+            responsive: true,
+            maintainAspectRatio: false, // Important for custom container size
+            scales: {
+                y: {
+                    // Your y-axis configuration remains the same
+                    beginAtZero: true, 
+                    ticks: { color: 'rgba(255, 255, 255, 0.7)', padding: 10 },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                },
+                // --- REPLACE YOUR EXISTING 'x' OBJECT WITH THIS ---
+                x: {
+                    type: 'time', // This tells Chart.js to use the time scale
+                    time: {
+                        // This defines how the labels are formatted at different zoom levels
+                        unit: 'day', // The primary unit to display
+                        displayFormats: {
+                            hour: 'MMM d, h a', // e.g., Sep 05, 6 PM
+                            day: 'MMM d',     // e.g., Sep 05
+                            week: 'MMM d, yyyy' // e.g., Sep 05, 2025
+                        }
+                    },
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        source: 'auto', // Automatically selects the best ticks
+                        padding: 10
+                    },
+                    grid: { 
+                        color: 'rgba(255, 255, 255, 0.1)' 
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top', // Moves legend to the top for a cleaner look
+                    align: 'end',
+                    labels: { 
+                        color: 'white',
+                        boxWidth: 15,
+                        padding: 20
+                    }
+                },
+                title: {
+                    display: true,
+                    text: chartData.title,
+                    color: 'white',
+                    font: { size: 16 },
+                    padding: { top: 10, bottom: 20 }
+                },
+                tooltip: {
+                    enabled: true,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleFont: { size: 14 },
+                    bodyFont: { size: 12 },
+                    padding: 10,
+                    cornerRadius: 4
+                },
+                zoom: { // Your existing zoom configuration
+                    pan: { enabled: true, mode: 'x' },
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                }
+            }
+        }
+    });
+}
+
+
+    /**
+     * 3. MODIFIED FUNCTION: Now handles text, base64 images, and chart data.
+     * The 'options' object can contain `imageB64` or `chartData`.
+     */
+    function renderMessage(text, sender, options = {}) {
+        const { imageB64, chartData } = options;
+        const messageId = `msg-${Date.now()}`;
+
+        const messageDiv = document.createElement('div');
+        messageDiv.id = messageId;
+        messageDiv.className = `flex items-end gap-3 message-bubble ${sender === 'user' ? 'justify-end' : 'justify-start'}`;
+
+        const iconHtml = sender === 'bot'
+            ? `<div class="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-white font-bold text-xl flex-shrink-0">A</div>`
+            : `<div class="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-xl flex-shrink-0">U</div>`;
+
+        const bubbleContent = document.createElement('div');
+        // Key Change 1: No max-width here
+        bubbleContent.className = `p-4 rounded-2xl ${sender === 'user' ? 'bg-indigo-600 rounded-br-none' : 'bg-gray-700 rounded-bl-none'}`;
+
+        if (text) {
+            const textParagraph = document.createElement('p');
+            // Key Change 2: max-width applied ONLY to text
+            textParagraph.className = 'text-base max-w-3xl'; 
+            textParagraph.innerHTML = markdownToHtml(text);
+            bubbleContent.appendChild(textParagraph);
+        }
+
+        if (imageB64) {
+            // ... (image logic is unchanged)
+        }
+
+        if (chartData) {
+            const chartContainer = document.createElement('div');
+            // Key Change 3: Wide classes applied to the chart's container
+            chartContainer.className = 'mt-4 bg-gray-800 p-2 rounded-lg h-96 w-full max-w-6xl'; 
+            
+            const canvasElement = document.createElement('canvas');
+            const canvasId = `chart-${messageId}`;
+            canvasElement.id = canvasId;
+            chartContainer.appendChild(canvasElement);
+            bubbleContent.appendChild(chartContainer);
+
+            setTimeout(() => {
+                const canvas = document.getElementById(canvasId);
+                renderChart(canvas, chartData);
+            }, 100);
+        }
+
+        if (sender === 'user') {
+            messageDiv.appendChild(bubbleContent);
+            messageDiv.innerHTML += iconHtml;
+        } else {
+            messageDiv.innerHTML += iconHtml;
+            messageDiv.appendChild(bubbleContent);
+        }
+
+        chatWindow.appendChild(messageDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+
+    function renderLoadingIndicator() {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = 'loading-indicator';
+        loadingDiv.className = 'flex items-end gap-3 justify-start message-bubble';
+        loadingDiv.innerHTML = `
+            <div class="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center text-white font-bold text-xl flex-shrink-0">A</div>
+            <div class="max-w-lg p-4 rounded-2xl bg-gray-700 rounded-bl-none">
+                <p class="text-sm text-gray-400 italic mb-2">Agent is thinking...</p>
+                <div class="flex items-center justify-center space-x-2">
+                    <div class="w-2 h-2 bg-cyan-300 rounded-full animate-pulse"></div>
+                    <div class="w-2 h-2 bg-cyan-300 rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+                    <div class="w-2 h-2 bg-cyan-300 rounded-full animate-pulse" style="animation-delay: 0.4s"></div>
+                </div>
+            </div>
+        `;
+        chatWindow.appendChild(loadingDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function removeLoadingIndicator() {
+        const indicator = document.getElementById('loading-indicator');
+        if (indicator) indicator.remove();
+    }
+
+    // --- Main Chat Logic ---
+    async function handleSend() {
+        const query = userInput.value.trim();
+        if (!query || isLoading) return;
+
+        setLoading(true);
+        renderMessage(query, 'user');
+        userInput.value = '';
+        renderLoadingIndicator();
+
+        try {
+            const response = await fetch(BACKEND_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: query }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            removeLoadingIndicator();
+            
+            if (data.error) {
+                renderMessage(`An error occurred: ${data.error}`, 'bot');
+            } else {
+                // --- THIS IS THE CORRECTED LOGIC ---
+                // It now correctly uses data.response for the LLM's summary text
+                // and passes both the text and chart data to renderMessage.
+                renderMessage(data.response, 'bot', { chartData: data.chart_data });
+            }
+
+        } catch (error) {
+            console.error("Error communicating with backend:", error);
+            removeLoadingIndicator();
+            renderMessage(`Error: Could not connect to the AI backend. ${error.message}`, 'bot');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function setLoading(state) {
+        isLoading = state;
+        userInput.disabled = state;
+        sendButton.disabled = state;
+    }
+
+    // --- Event Listeners ---
+    sendButton.addEventListener('click', handleSend);
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleSend();
+    });
+
+    // --- Initial Message ---
+    window.onload = () => {
+         const initialMessage = "Hello! I am an AI agent. I can provide current weather, AQI, scientific info, and plot historical trends (e.g., 'show the trend of pm2.5 in Delhi for the last week').";
+         renderMessage(initialMessage, "bot");
+    };
+</script>
+</body>
+</html>

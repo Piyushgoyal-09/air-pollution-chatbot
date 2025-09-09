@@ -1,0 +1,17 @@
+# --- Secrets ---
+# This is the most important line. It prevents your API keys from being uploaded.
+.env
+
+# --- Databases ---
+# This ignores the local ChromaDB vector store, which can be large.
+rag_chroma_db/
+
+# --- Python Cache ---
+# These are temporary files Python creates. It's standard practice to ignore them.
+__pycache__/
+*.pyc
+
+# --- Virtual Environments (Recommended) ---
+# If you use a virtual environment folder like 'venv', ignore it.
+venv/
+.venv/
