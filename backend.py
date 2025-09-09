@@ -16,8 +16,7 @@ from langchain.prompts import PromptTemplate
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.vectorstores import Chroma
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # Import the enhanced analysis tool
@@ -63,7 +62,7 @@ try:
         model="gemini-1.5-flash", 
         google_api_key=GOOGLE_API_KEY, 
         temperature=0,
-        request_timeout=30
+        timeout=30
     )
     logger.info("LLM initialized successfully")
 except Exception as e:
@@ -73,11 +72,9 @@ except Exception as e:
 # --- RAG Pipeline Setup ---
 PDF_FILE_PATH = "Air pollution and control by K.V. S.G. MuraLi Krishna.pdf"
 CHROMA_PERSIST_DIR = "./rag_chroma_db"
-EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 rag_retriever = None
-
 try:
-    embedding_function = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+    embedding_function = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=GOOGLE_API_KEY)
     if os.path.exists(CHROMA_PERSIST_DIR):
         vectorstore = Chroma(persist_directory=CHROMA_PERSIST_DIR, embedding_function=embedding_function)
         logger.info("Loaded existing vector store")
